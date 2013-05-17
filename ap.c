@@ -89,6 +89,27 @@ static void up_from_dll(int link, const char *data, size_t length)
   printf("AP: Received frame on link %d from node %" PRId32
          " for node %" PRId32 ".\n", link, packet->src, packet->dest);
   
+  if(strcmp("RTS", packet->data)) {
+    
+  struct nl_packet cts = (struct nl_packet) {
+    .src = nodeinfo.address,
+    .length = 10
+  };
+
+  char src[10];
+  strcpy(cts.data, "CTS");
+  sprintf(src, "%d", packet->src);
+  strcat(cts.data, src);
+  
+  uint16_t cts_length = NL_PACKET_LENGTH(cts);
+
+  CnetNICaddr broadcast;
+  CHECK(CNET_parse_nicaddr(broadcast, "ff:ff:ff:ff:ff:ff"));
+
+  dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);
+  return;   
+  }
+
   // We rebroadcast the packet on all of our links. If the packet came in on an
   // Ethernet link, then don't rebroadcast on that because all other nodes have
   // already seen it.
