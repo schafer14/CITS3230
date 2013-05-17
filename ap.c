@@ -101,6 +101,7 @@ static void up_from_dll(int link, const char *data, size_t length)
   sprintf(src, "%d", packet->src);
   strcat(cts.data, src);
   
+  cts.checksum = CNET_crc32((unsigned char *)&cts, sizeof(cts));
   uint16_t cts_length = NL_PACKET_LENGTH(cts);
 
   CnetNICaddr broadcast;

@@ -10,6 +10,10 @@
 #include "network.h"
 #include "walking.h"
 
+
+//Because that's what happens in C!?!
+void sendNext();
+
 // Mobile nodes can only have WLAN links, so we always use the WiFi data link
 // layer.
 static struct dll_wifi_state **dll_states;
@@ -18,6 +22,18 @@ static struct dll_wifi_state **dll_states;
 
 // Keep a list of checksums that we have seen recently.
 static uint32_t seen_checksums[PACKET_MEMORY_LENGTH];
+
+//typedef struct
+//{
+//	int dest;
+//	char * data;
+//}, message;
+
+//static int first = 0;
+//static int last = 0;
+//static struct message buffer[100];
+
+static int CAN_SEND = 0;
 
 // The next index we should overwrite in seen_checksums.
 static size_t next_seen_checksum = 0;
@@ -29,8 +45,8 @@ static EVENT_HANDLER(physical_ready)
   // First we read the frame from the physical layer.
   char frame[DLL_MTU];
   size_t length	= sizeof(frame);
-  int link;  
-  
+  int link;
+
   CHECK(CNET_read_physical(&link, frame, &length));
   
   // Now we forward this information to the data link layer, if it exists.
@@ -43,8 +59,11 @@ static EVENT_HANDLER(physical_ready)
 /// Called when we receive data from one of our data link layers.
 ///
 static void up_from_dll(int link, const char *data, size_t length)
-{
-  if (length > sizeof(struct nl_packet)) {
+{  
+
+  //:: fix >= to >
+  if (length > sizeof(struct nl_packet)) { //This is an erro right? Ment to be > not >=
+ //:   printf("Your length is %zu, Max length is %zu", length, sizeof(struct nl_packet));
     printf("Mobile: %zu is larger than a nl_packet! ignoring.\n", length);
     return;
   }
@@ -53,10 +72,13 @@ static void up_from_dll(int link, const char *data, size_t length)
   struct nl_packet packet;
   memset(&packet, 0, sizeof(packet));
   memcpy(&packet, data, length);
+
   
   printf("Mobile: Received frame from dll on link %d from node %" PRId32
          " for node %" PRId32 ".\n", link, packet.src, packet.dest);
-  
+ 
+  printf("Mobile data: %s\n", data);
+ 
   uint32_t checksum = packet.checksum;
   packet.checksum = 0;
   
@@ -65,10 +87,34 @@ static void up_from_dll(int link, const char *data, size_t length)
     return;
   }
   
-  if (packet.dest != nodeinfo.address) {
-    printf("\tThat's not for me.\n");
+//  if (packet.dest != nodeinfo.address) {
+//    printf("\tThat's not for me.\n");
+  
+    //check the first three letters to see if it's "CTS" 
+    char a [4];
+    strncpy(a, packet.data, 3);
+
+    //If it's a CTS get who has the CTS
+    if(0 == strcmp(a, "CTS")) {
+        char access [5];
+        memcpy(access, &packet.data[3], 2);
+	
+        printf("CTS to: %s\n", access);
+	if(nodeinfo.address == atoi(access))
+	{
+		CAN_SEND = 1; 
+		printf("I am cleared to send \n");
+		sendNext();
+	}  	
+	else 
+	{
+		CAN_SEND = -1;
+	 	printf("I better not be sendin \n");
+	}
+    } 
+
     return;
-  }
+ // }
   
   // Check if we've seen this packet recently.
   for (size_t i = 0; i < PACKET_MEMORY_LENGTH; ++i) {
@@ -98,26 +144,59 @@ static EVENT_HANDLER(application_ready)
     .src = nodeinfo.address,
     .length = NL_MAXDATA
   };
-               
+
+  //MAKE A RTS packet
+  struct nl_packet rts = (struct nl_packet){
+     .src = nodeinfo.address,
+     .length = NL_MAXDATA
+   }; 
+  
   CHECK(CNET_read_application(&packet.dest, packet.data, &packet.length));
  
+  strcpy(rts.data, "RTS");
+ 
+  //create checksum for RTS
+  rts.checksum = CNET_crc32((unsigned char*)&rts, sizeof(rts));
   packet.checksum = CNET_crc32((unsigned char *)&packet, sizeof(packet));
   
   printf("Mobile: Generated message for % " PRId32
          ", broadcasting on all data link layers\n",
          packet.dest);
   
-  // Create a broadcast address.
+
+
+
+ // Create a broadcast address.
   CnetNICaddr wifi_dest;
   CHECK(CNET_parse_nicaddr(wifi_dest, "ff:ff:ff:ff:ff:ff"));
-  
+  //CnetNICaddr rts_dest; 
+  //CHECK(CNET_parse_nicaddr(rts_dest, "ff:ff:ff:ff:ff:ff"));
+ 
   uint16_t packet_length = NL_PACKET_LENGTH(packet);
-  
+
+  //printf("RTS DATA: %s\n", rts.data);
+
+  //printf("packt.data: %s\n", packet.data); 
+  //printf("Packet size: %zu\n", sizeof(packet));
+  printf("wifi dest: %zu\n", packet.dest);
+  //printf("Node info: %zu\n", nodeinfo.nlinks);
+
   for (int i = 1; i <= nodeinfo.nlinks; ++i) {
     if (dll_states[i] != NULL) {
-      dll_wifi_write(dll_states[i], wifi_dest, (char *)&packet, packet_length);
+       dll_wifi_write(dll_states[i], wifi_dest, (char *)&packet, packet_length); 
+
+	//message{
+	//	.dest = packet.dest;
+	//	.data = packet.data;
+	//};
+	//dll_wifi_write(dll_states[i], wifi_dest, (char *)&packet, packet_length);
     }
   }
+}
+
+void sendNext()
+{
+	printf("ENTERING SEND NEXT MODE");
 }
 
 /// Called when this mobile node is booted up.
@@ -130,7 +209,7 @@ void reboot_mobile()
   // Provide the required event handlers.
   CHECK(CNET_set_handler(EV_PHYSICALREADY, physical_ready, 0));
   CHECK(CNET_set_handler(EV_APPLICATIONREADY, application_ready, 0));
-  
+
   // Initialize mobility.
   init_walking();
   start_walking();
