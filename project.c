@@ -12,8 +12,7 @@
 
 /// Called when any of our nodes are booted up.
 ///
-EVENT_HANDLER(reboot_node)
-{
+EVENT_HANDLER(reboot_node) {
   // Ensure that we're running the correct version of cnet.
   CNET_check_version(CNET_VERSION);
   

@@ -11,9 +11,9 @@
 #include <time.h>
 #include <math.h>
 
-#define ETH_MAXDATA 1500	// The maximum amount of data we can send
-#define ETH_MINFRAME 64		// The minimum amount of data we can send
-#define IFG 9.6	// Our interframe gap period that a link will wait before retransmitting if the line is busy		
+#define ETH_MAXDATA 1500	// The maximum amount of data we can send.
+#define ETH_MINFRAME 64		// The minimum amount of data we can send.
+#define IFG 9.6			// Our interframe gap period that a link will wait before retransmitting if the line is busy.		
 
 /// This struct type will hold the state for one instance of the Ethernet data
 /// link layer. The definition of the type is not important for clients.
@@ -46,24 +46,23 @@ struct eth_frame {
   char data[ETH_MAXDATA];
 };
 
-CnetTimerID lasttimer = NULLTIMER;	// Create a cnet timer to hold our carrier sense data
-struct eth_frame tempframe;	// This will hold the temporary frame that has to be delayed when we encounter a collision or the line is busy!!!!!
-struct dll_eth_state *tempstate;	// Take note of the link to be used when we encounter a collision or line is busy!!!
-size_t tempframe_length;	// Hold the frame length for retransmission use
+CnetTimerID lasttimer = NULLTIMER;	// Create a cnet timer to hold our carrier sense data.
+struct eth_frame tempframe;		// This will hold the temporary frame that has to be delayed when the line is busy.
+struct dll_eth_state *tempstate;	// Take note of the state of the ethernet link when the line is busy.
+size_t tempframe_length;		// Hold the frame length for retransmission use.
 
 #define ETH_HEADER_LENGTH (offsetof(struct eth_frame, data))
 
-/// If line is busy try and retransmit
+/// If line is busy try and retransmit.
 //
 static EVENT_HANDLER(IFG_timeout) {
-  fprintf(stdout, "%d: eth line busy, framesize is %d\n", nodeinfo.nodenumber, (int)tempframe_length + ETH_HEADER_LENGTH);
+  //fprintf(stdout, "%d: eth line busy, framesize is %d\n", nodeinfo.nodenumber, (int)(tempframe_length + ETH_HEADER_LENGTH));
   dll_eth_write(tempstate, tempframe.dest, tempframe.data, tempframe_length);	// Try and retransmit our frame!!!
 }
 
 /// Create a new state for an instance of the Ethernet data link layer.
 ///
-struct dll_eth_state *dll_eth_new_state(int link, up_from_dll_fn_ty callback)
-{
+struct dll_eth_state *dll_eth_new_state(int link, up_from_dll_fn_ty callback) {
   // Ensure that the given link exists and is a LAN link.
   if (link > nodeinfo.nlinks || linkinfo[link].linktype != LT_LAN)
     return NULL;
@@ -88,10 +87,8 @@ struct dll_eth_state *dll_eth_new_state(int link, up_from_dll_fn_ty callback)
 /// Delete the given dll_eth_state. The given state pointer will be invalid
 /// following a call to this function.
 ///
-void dll_eth_delete_state(struct dll_eth_state *state)
-{
-  if (state == NULL)
-    return;
+void dll_eth_delete_state(struct dll_eth_state *state) {
+  if (state == NULL) return;	// If state is already empty then return.
   
   // Free any dynamic memory that is used by the members of the state.
   free(state);
@@ -102,49 +99,44 @@ void dll_eth_delete_state(struct dll_eth_state *state)
 void dll_eth_write(struct dll_eth_state *state,
                    CnetNICaddr dest,
                    const char *data,
-                   uint16_t length)
-{
+                   uint16_t length) {
   // If line is transmitting
   if(CNET_carrier_sense(state->link) == 1) {
-    if (!data || length == 0) return;	// If NULL return
+    if (!data || length == 0) return;	// If data is invalid discard.
 
     tempstate = state;	// Assign a pointer that points to our current state.
 
-    //	Fill our tempframe with buffered details to be retransmitted!!!!
+    //	Fill our tempframe with buffered details to be retransmitted.
     memcpy(tempframe.dest, dest, sizeof(CnetNICaddr));
     memcpy(tempframe.src, linkinfo[state->link].nicaddr, sizeof(CnetNICaddr));
     memcpy(tempframe.type, &length, sizeof(length));
     memcpy(tempframe.data, data, length);
-   
-    // If frame length is less than our minimum frame size padd the length to ensure the packet is transmitted!!!
     tempframe_length = length;
     
-    CnetTime backoff = ((CnetTime)IFG);	// Backoff for the interframe gap, smaller time means faster transfer but more collisions and vice versa!!!!!!!!!
-    lasttimer = CNET_start_timer(EV_TIMER1, backoff, 0); // Start timer
+    CnetTime backoff = ((CnetTime)IFG);	// Backoff for the interframe gap.
+    lasttimer = CNET_start_timer(EV_TIMER1, backoff, 0); // Start timer.
+    return;
   } 
-  else {
-    if (!data || length == 0) return;	// If NULL return
+  if (!data || length == 0) return;	// If data is invalid discard.
     
-    struct eth_frame frame;	// Create a frame
+  struct eth_frame frame;	// Create a frame
     
-    // Set the destination and source address.
-    memcpy(frame.dest, dest, sizeof(CnetNICaddr));
-    memcpy(frame.src, linkinfo[state->link].nicaddr, sizeof(CnetNICaddr));
+  // Set the destination and source address.
+  memcpy(frame.dest, dest, sizeof(CnetNICaddr));
+  memcpy(frame.src, linkinfo[state->link].nicaddr, sizeof(CnetNICaddr));
       
-    // Set the length of the payload.
-    memcpy(frame.type, &length, sizeof(length));
+  // Set the length of the payload.
+  memcpy(frame.type, &length, sizeof(length));
     
-    // Copy the payload into the frame.
-    memcpy(frame.data, data, length);
+  // Copy the payload into the frame.
+  memcpy(frame.data, data, length);
       
-    // Calculate the number of bytes to send.
-    size_t frame_length = length + ETH_HEADER_LENGTH;
-    if (frame_length < ETH_MINFRAME)
-      frame_length = ETH_MINFRAME;
+  // Calculate the number of bytes to send.
+  size_t frame_length = length + ETH_HEADER_LENGTH;
+  if (frame_length < ETH_MINFRAME) frame_length = ETH_MINFRAME;	// If frame length is less than the minimum frame size pad the frame to the minimum size.
   
-    CHECK(CNET_write_physical(state->link, &frame, &frame_length));
-    fprintf(stdout, "%d: eth success, framesize is %d\n", nodeinfo.nodenumber, (int)frame_length);
-  }
+  CHECK(CNET_write_physical(state->link, &frame, &frame_length));	// Write the frame to the physical layer.
+  //fprintf(stdout, "%d: eth success, framesize is %d\n", nodeinfo.nodenumber, (int)frame_length);
 }
 
 /// Called when a frame has been received on the Ethernet link. This function
@@ -153,12 +145,9 @@ void dll_eth_write(struct dll_eth_state *state,
 ///
 void dll_eth_read(struct dll_eth_state *state,
                   const char *data,
-                  size_t length)
-{
-  // printf("Ethernet: read frame of length %zd.\n", length);
-  
+                  size_t length) {
+  // If length is larger than our frame discard frame.
   if (length > sizeof(struct eth_frame)) {
-    // printf("\tFrame is too large!\n");
     return;
   }
   

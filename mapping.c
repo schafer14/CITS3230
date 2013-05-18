@@ -24,8 +24,7 @@ static	int	miny		= (1<<30);
 static	int	maxx		= -1;
 static	int	maxy		= -1;
 
-static void add_object(char *text, int x0, int y0, int x1, int y1)
-{
+static void add_object(char *text, int x0, int y0, int x1, int y1) {
     objects	= realloc(objects, (nobjects+1)*sizeof(OBJECT));
 
     if(objects) {
@@ -57,8 +56,7 @@ static void add_object(char *text, int x0, int y0, int x1, int y1)
 	nobjects = 0;
 }
 
-static void draw_objects(void)
-{
+static void draw_objects(void) {
 #define	SCALE(x)	((int)((x) / scale))
 
     double	scale	= CNET_get_mapscale();
@@ -77,8 +75,7 @@ TCLTK("$map lower [$map create rect %d %d %d %d -width 1 -outline %s -fill %s]",
     }
 }
 
-static char *trim(char *line)
-{
+static char *trim(char *line) {
     char	*s = line;
 
     while(*s) {
@@ -94,8 +91,7 @@ static char *trim(char *line)
     return s;
 }
 
-void readmap(const char *mapfile)
-{
+void readmap(const char *mapfile) {
     FILE *fp	= fopen(mapfile, "r");
 
 //  EACH NODE READS IN THE MAP DETAILS
@@ -140,8 +136,7 @@ void readmap(const char *mapfile)
     http://compgeom.cs.uiuc.edu/~jeffe/teaching/373/notes/x06-sweepline.pdf
  */
 
-static bool ccw(int x0, int y0, int x1, int y1, int x2, int y2)
-{
+static bool ccw(int x0, int y0, int x1, int y1, int x2, int y2) {
     int	a = x0 - x1,
 	b = y0 - y1,
 	c = x2 - x1,
@@ -150,8 +145,7 @@ static bool ccw(int x0, int y0, int x1, int y1, int x2, int y2)
 }
 
 //  DOES THE PATH FROM S -> D PASS THROUGH AN OBJECT?
-bool through_an_object(CnetPosition S, CnetPosition D)
-{
+bool through_an_object(CnetPosition S, CnetPosition D) {
     for(int n=0 ; n<nobjects ; ++n) {
 	OBJECT	*op	= &objects[n];
 
@@ -166,8 +160,7 @@ bool through_an_object(CnetPosition S, CnetPosition D)
 }
 
 //  THROUGH HOW MANY OBJECTS DOES THE PATH FROM S -> D PASS?
-int through_N_objects(CnetPosition S, CnetPosition D)
-{
+int through_N_objects(CnetPosition S, CnetPosition D) {
     int	count	= 0;
 
     for(int n=0 ; n<nobjects ; ++n) {
@@ -184,8 +177,7 @@ int through_N_objects(CnetPosition S, CnetPosition D)
 }
 
 //  CHOOSE A RANDOM POSITION WITHIN THE MAP, BUT NOT WITHIN ANY OBJECT
-void choose_position(CnetPosition *new)
-{
+void choose_position(CnetPosition *new) {
     for(;;) {
 	int	tryx	= CNET_rand() % (maxx - minx) + minx;
 	int	tryy	= CNET_rand() % (maxy - miny) + miny;
@@ -211,8 +203,7 @@ void choose_position(CnetPosition *new)
 #define	SIGNAL_LOSS_PER_OBJECT		8.0		// dBm
 
 //  CALCULATE WIRELESS TRANSMISSION THROUGH MAP OBJECTS
-WLANRESULT  my_WLAN_model(WLANSIGNAL *sig)
-{
+WLANRESULT  my_WLAN_model(WLANSIGNAL *sig) {
     int		dx, dy;
     double	metres;
     double	TXtotal, FSL, budget;
