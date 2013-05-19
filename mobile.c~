@@ -89,9 +89,6 @@ static void up_from_dll(int link, const char *data, size_t length) {
   printf("Mobile data: %s\n", data);
   uint32_t checksum = packet.checksum;
   packet.checksum = 0;
-  
-      CnetNICaddr wifi_dest;
-    CHECK(CNET_parse_nicaddr(wifi_dest, "ff:ff:ff:ff:ff:ff"));
    
   // Ensure checksum is valid.
   if ((CNET_crc32((unsigned char *)&packet, sizeof(packet)) != checksum) || (packet.seqNum != seqNumExpected)) {
