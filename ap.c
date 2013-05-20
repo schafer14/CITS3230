@@ -81,29 +81,30 @@ static void up_from_dll(int link, const char *data, size_t length) {
          " for node %" PRId32 ".\n", link, packet->src, packet->dest);
  
   // If the packet is a RTS packet.
-  // The strcmp function does not work correctly you can put any word to cmp and it will come up as true!!, check fprintf below to see!. 
-  // fprintf(stdout, "node %d: data is %s\n", nodeinfo.address, packet->data);
-  /*if(strcmp("RTS", packet->data)) {
-    
+  if(!strcmp("RTS", packet->data)) {
+    // Create a CTS packet.
     struct nl_packet cts = (struct nl_packet) {
       .src = nodeinfo.address,
       .length = 10
     };
 
+    // Copy our CTS data into our packet.
     char src[10];
     strcpy(cts.data, "CTS");
     sprintf(src, "%d", packet->src);
     strcat(cts.data, src);
   
+    // Create a checksum.
     cts.checksum = CNET_crc32((unsigned char *)&cts, sizeof(cts));
     uint16_t cts_length = NL_PACKET_LENGTH(cts);
 
+    // Broadcast on all wifi links
     CnetNICaddr broadcast;
     CHECK(CNET_parse_nicaddr(broadcast, "ff:ff:ff:ff:ff:ff"));
 
-    dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);
+    dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);	// Write to wifi data link layer.
     return;   
-  }*/
+  }
 
   // We rebroadcast the packet on all of our links. If the packet came in on an
   // Ethernet link, then don't rebroadcast on that because all other nodes have

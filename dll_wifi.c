@@ -11,7 +11,7 @@
 #include <time.h>
 
 #define WIFI_MAXDATA 2312	// Define max wifi size.
-#define SLOT 30		     	// Define our backoff slot time.
+#define SLOT 39		     	// Define our backoff slot time. Can be between 28 or 50.
 
 /// This struct type will hold the state for one instance of the WiFi data
 /// link layer. The definition of the type is not important for clients.
@@ -69,14 +69,15 @@ int busy;				// Count the number of delays
 #define WIFI_HEADER_LENGTH (offsetof(struct wifi_frame, data))
 
 /// This function will be used to attempt to retransmit our frame that was delayed.
-//
+///
 static EVENT_HANDLER(backoff) {
-  //fprintf(stdout, "node %d: line busy %d\n", nodeinfo.address, busy);
   busy++;
   dll_wifi_write(tempstate, tempframe.dest, tempframe.data, tempframe_length);
 }
 
-void exp_backoff() {
+/// This function will process our exponential backoff. 
+///
+void wifi_exp_backoff() {
   srand(time(NULL)); // Create a new seed to be used in our rand function.
   int c;	// Create an integer to be used to help generate our random backoff time.
      
@@ -111,7 +112,6 @@ struct dll_wifi_state *dll_wifi_new_state(int link,
   state->link = link;
   state->nl_callback = callback;
   state->is_ds = is_ds;
-  busy = 1;
   
   // Call our required event handlers
   CHECK(CNET_set_handler(EV_TIMER2, backoff, 0)); 
@@ -150,7 +150,9 @@ void dll_wifi_write(struct dll_wifi_state *state,
     tempframe.checksum = CNET_crc32((unsigned char *)&tempframe, sizeof(tempframe));
     tempframe_length = length;
     
-    exp_backoff(); // Call our exponential delay
+    //fprintf(stdout, "wifi busy, waiting....\n");
+
+    wifi_exp_backoff(); // Call our exponential delay
     
     return;
   }
@@ -179,7 +181,7 @@ void dll_wifi_write(struct dll_wifi_state *state,
   size_t frame_length = WIFI_HEADER_LENGTH + length;
   
   CHECK(CNET_write_physical(state->link, &frame, &frame_length));
-  //fprintf(stdout, "node %d: wifi success, framesize is %d\n", nodeinfo.address, (int)frame_length);
+  //fprintf(stdout, "wifi success\n");
 }
 
 /// Called when a frame has been received on the WiFi link. This function will

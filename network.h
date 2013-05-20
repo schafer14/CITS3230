@@ -13,6 +13,7 @@
 //
 #define NL_MAXDATA 1024
 
+// Define an enum to represent our frame.
 enum networkAck {
     ACK,
     NACK,
