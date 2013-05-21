@@ -11,7 +11,7 @@
 #include <time.h>
 
 #define WIFI_MAXDATA 2312	// Define max wifi size.
-#define SLOT 40		     	// Define our backoff slot time.
+#define SLOT 39		     	// Define our backoff slot time. Can be between 28 or 50.
 
 /// This struct type will hold the state for one instance of the WiFi data
 /// link layer. The definition of the type is not important for clients.
@@ -54,9 +54,6 @@ struct wifi_frame {
   
   // CRC32 for the entire frame.
   uint32_t checksum;
-
-  // Number of collisions the frame has experienced.
-  int collisions;
   
   // Data must be the last field, because we will truncate the unused area when
   // sending to the physical layer.
@@ -67,12 +64,34 @@ CnetTimerID lasttimer2 = NULLTIMER;	// This timer ID will hold our carrier sense
 struct dll_wifi_state *tempstate;	// This will be used to store our wifi state for retransmission use.
 struct wifi_frame tempframe;		// This will be used to hold our buffered frame for retransmission when line is busy.
 size_t tempframe_length;		// This will be used to hold the size of our frame for retransmission use.
+int busy;				// Count the number of delays
 
 #define WIFI_HEADER_LENGTH (offsetof(struct wifi_frame, data))
 
+/// This function will be used to attempt to retransmit our frame that was delayed.
+///
 static EVENT_HANDLER(backoff) {
-  //fprintf(stdout, "node %d: collision %d\n", nodeinfo.address, tempframe.collisions);
+  busy++;
   dll_wifi_write(tempstate, tempframe.dest, tempframe.data, tempframe_length);
+}
+
+/// This function will process our exponential backoff. 
+///
+void wifi_exp_backoff() {
+  srand(time(NULL)); // Create a new seed to be used in our rand function.
+  int c;	// Create an integer to be used to help generate our random backoff time.
+     
+  // If more than 16 delays discard the frame.
+  if(busy == 16) {
+    busy = 0;
+    return;
+  }
+  else if(busy >= 10) c = rand() % (int)pow(2, 10);	// Back off for maximum time.
+  else if(busy < 10) c = rand() % (int)pow(2, busy);	// Calculate backoff time.
+    
+  CnetTime backoff = ((CnetTime)SLOT * c);	// Set amount of time to delay.
+  lasttimer2 = CNET_start_timer(EV_TIMER2, backoff, 0);	// Start timer.
+  return;
 }
 
 /// Create a new state for an instance of the WiFi data link layer.
@@ -93,7 +112,7 @@ struct dll_wifi_state *dll_wifi_new_state(int link,
   state->link = link;
   state->nl_callback = callback;
   state->is_ds = is_ds;
-
+  
   // Call our required event handlers
   CHECK(CNET_set_handler(EV_TIMER2, backoff, 0)); 
   
@@ -130,28 +149,15 @@ void dll_wifi_write(struct dll_wifi_state *state,
     memcpy(tempframe.data, data, length);
     tempframe.checksum = CNET_crc32((unsigned char *)&tempframe, sizeof(tempframe));
     tempframe_length = length;
-    tempframe.collisions+= 1;	// Increment number of collisions.
     
-    srand(time(NULL)); // Create a new seed to be used in our rand function.
+    //fprintf(stdout, "wifi busy, waiting....\n");
+
+    wifi_exp_backoff(); // Call our exponential delay
     
-    int c;	// Create an integer to be used to help generate our random backoff time.
-    
-    //fprintf(stdout, "node %d, collisions %d, framesize %d\n", nodeinfo.address, tempframe.collisions, (int)(length+WIFI_HEADER_LENGTH));
-    
-    // If more than 16 collisions discard the frame.
-    if(tempframe.collisions == 16) {
-      tempframe.collisions = 0;
-      return;
-    }
-    else if(tempframe.collisions >= 10) c = rand() % (int)pow(2, 10);	// Back off for maximum time.
-    else if(tempframe.collisions < 10) c = rand() % (int)pow(2, tempframe.collisions);	// Calculate backoff time.
-    
-    CnetTime backoff = ((CnetTime)SLOT * c);	// Set amount of time to delay.
-    lasttimer2 = CNET_start_timer(EV_TIMER2, backoff, 0);	// Start timer.
     return;
   }
   //fprintf(stdout, "node %d: collision on success %d ", nodeinfo.address, tempframe.collisions);
-  tempframe.collisions = 0;
+  busy = 1;	// Reset our count because the line is clear
   
   // Create a frame and initialize the length field.
   struct wifi_frame frame = (struct wifi_frame) {
@@ -175,7 +181,7 @@ void dll_wifi_write(struct dll_wifi_state *state,
   size_t frame_length = WIFI_HEADER_LENGTH + length;
   
   CHECK(CNET_write_physical(state->link, &frame, &frame_length));
-  //fprintf(stdout, "node %d: wifi success, framesize is %d\n", nodeinfo.address, (int)frame_length);
+  //fprintf(stdout, "wifi success\n");
 }
 
 /// Called when a frame has been received on the WiFi link. This function will

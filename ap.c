@@ -87,22 +87,27 @@ static void up_from_dll(int link, const char *data, size_t length) {
   // fprintf(stdout, "STR COMPARE: node %d: data is %s\n", nodeinfo.address, packet->data);
   if(! strcmp("RTS", packet->data) && AVAILABLE_FOR == packet->src) {
     
+    // Create a CTS packet.
     struct nl_packet cts = (struct nl_packet) {
       .src = nodeinfo.address,
       .length = 10
     };
 
+    // Copy our CTS data into our packet.
     char src[10];
     strcpy(cts.data, "CTS");
     sprintf(src, "%d", packet->src);
     strcat(cts.data, src);
   
+    // Create a checksum.
     cts.checksum = CNET_crc32((unsigned char *)&cts, sizeof(cts));
     uint16_t cts_length = NL_PACKET_LENGTH(cts);
 
+    // Broadcast on all wifi links
     CnetNICaddr broadcast;
     CHECK(CNET_parse_nicaddr(broadcast, "ff:ff:ff:ff:ff:ff"));
 
+<<<<<<< HEAD
     dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);
     AVAILABLE_FOR = 0;
     fprintf(stdout, "Node %d is CTS. AP %d is not Available.\n", packet->src, nodeinfo.address); 
@@ -116,6 +121,11 @@ static void up_from_dll(int link, const char *data, size_t length) {
 
 
 
+=======
+    dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);	// Write to wifi data link layer.
+    return;   
+  }
+>>>>>>> 4c54b38f16169fe07f5d721000f08e2d7f95d719
 
   // We rebroadcast the packet on all of our links. If the packet came in on an
   // Ethernet link, then don't rebroadcast on that because all other nodes have
