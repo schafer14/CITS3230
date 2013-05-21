@@ -69,7 +69,6 @@ void sendNext() {
     }
   }
 
-  fprintf(stdout, "Buffer[first].data: %s\n", buffer[first].data);
 }
 
 /// This function will handle our frame timeouts.
