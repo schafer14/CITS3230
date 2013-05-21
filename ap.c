@@ -121,7 +121,7 @@ static void up_from_dll(int link, const char *data, size_t length) {
 
 
 
-  //fprintf(stdout, "Packet received from: %d\n", packet->src);
+  fprintf(stdout, "Packet received from: %d\n", packet->src);
 
   // We rebroadcast the packet on all of our links. If the packet came in on an
   // Ethernet link, then don't rebroadcast on that because all other nodes have

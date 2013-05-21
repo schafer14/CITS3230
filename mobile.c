@@ -112,11 +112,18 @@ static void up_from_dll(int link, const char *data, size_t length) {
     printf("Mobile: %zu is larger than a nl_packet! ignoring.\n", length);
     return;
   }
-  
   // Treat this frame as a network layer packet.
   struct nl_packet packet;
   memset(&packet, 0, sizeof(packet));
   memcpy(&packet, data, length);
+
+  if (packet.dest == nodeinfo.address) 
+  {
+	fprintf(stdout, "I GOT A MESSAGE");
+	fprintf(stdout, "from %d\n", packet.src);//I had packet.dest here. I was so confused :(
+	fprintf(stdout, "\t I am %d btws\n", nodeinfo.address);
+  }
+
 
   printf("Mobile: Received frame from dll on link %d from node %" PRId32
          " for node %" PRId32 ".\n", link, packet.src, packet.dest);
@@ -270,7 +277,7 @@ static EVENT_HANDLER(application_ready) {
   rts.checksum = CNET_crc32((unsigned char*)&rts, sizeof(rts));
   packet.checksum = CNET_crc32((unsigned char *)&packet, sizeof(packet));
   
-  printf("Mobile: Generated message for % " PRId32
+  fprintf(stdout, "Mobile: Generated message for % " PRId32
          ", broadcasting on all data link layers\n",
          packet.dest);
    
