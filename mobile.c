@@ -17,7 +17,7 @@ static struct dll_wifi_state **dll_states;
 #define MAX_BUFFER 100;
 struct nl_packet lastpacket;	// Define a variable to hold our last packet data.
 static size_t lastlength = 0;	// Define a variabe to hold our length.
-static CnetTimerID lasttimer3 = NULLTIMER;	// Will store our timer data.
+//static CnetTimerID lasttimer3 = NULLTIMER;	// Will store our timer data.
 
 static int nextSeqNum = 0;	// Will store our next sequence number.
 static int seqNumExpected =0;	// Will store the expected sequence number.
@@ -27,13 +27,14 @@ static int ackexpected = 0;	// Will store the ACK expected.
 
 #define PACKET_MEMORY_LENGTH 1024
 
-#define   WINDOWSIZE   8
-//static  struct nl_packet packetSent[WINDOWSIZE];
+#define   WINDOWSIZE   9
+static  struct nl_packet packetSent[WINDOWSIZE];
 //static  struct nl_packet packetRec[WINDOWSIZE];
 #define   MAXSEQ   2*WINDOWSIZE 
-//static CnetTimerID  timers[WINDOWSIZE];
+static CnetTimerID  timers[WINDOWSIZE];
 //static bool arrived[WINDOWSIZE];
 // Keep a list of checksums that we have seen recently.
+static int seqNums[MAXSEQ];
 static uint32_t seen_checksums[PACKET_MEMORY_LENGTH];
 
 typedef struct MESSAGE
@@ -152,10 +153,10 @@ static void up_from_dll(int link, const char *data, size_t length) {
     // Put something to send NACK here.
     struct nl_packet npacket = (struct nl_packet) {
       .src = nodeinfo.address,
-      .dest = lastpacket.src,
+      .dest = packet.src,
       .length = 0,
       .type = NACK,
-      .seqNum = lastpacket.seqNum /// global next seqNum
+      .seqNum = packet.seqNum /// global next seqNum
     };
       
     uint16_t packet_length = NL_PACKET_LENGTH(npacket);
@@ -168,9 +169,9 @@ static void up_from_dll(int link, const char *data, size_t length) {
     switch(packet.type) {
       case ACK: {
     printf("\t seqNum received:%d expected: %d \n", packet.seqNum, seqNumExpected);
-        if(packet.seqNum == ackexpected) {
-          printf("\t\t\t\tACK received, seq=%d\n", packet.seqNum);
-          CNET_stop_timer(lasttimer3);
+        if(packet.seqNum == seqNums[packet.src]) {
+          printf("\t\t\t\tACK received, seq=%d from node \n", packet.seqNum);
+          CNET_stop_timer(timers[packet.dest]);
           ackexpected = 1-ackexpected;
           //CNET_enable_application(ALLNODES);
         }
@@ -179,19 +180,14 @@ static void up_from_dll(int link, const char *data, size_t length) {
       case NACK: {
         if(packet.seqNum == ackexpected) {
           printf("\t\t\t\tNACK received, seq=%d\n", packet.seqNum);
-          CNET_stop_timer(lasttimer3);
+          CNET_stop_timer(timers[packet.dest]);
           printf("timeout, seq=%d\n", ackexpected);
           //transmit_frame(lastmsg, DL_DATA, lastlength, ackexpected);
-		struct nl_packet rpacket = (struct nl_packet){
-          		.src = nodeinfo.address,
-          		.dest = lastpacket.src,
-          		.length = NL_MAXDATA,
-          		.type = DATA,
-         		 .seqNum = lastpacket.seqNum /// global next seqNum
-       		 };
+		struct nl_packet rpacket = packetSent[packet.src];
+
          	ackexpected = 1;     
         	uint16_t packet_length = NL_PACKET_LENGTH(rpacket);
-		rpacket.checksum = CNET_crc32((unsigned char *)&rpacket, sizeof(rpacket));
+		//rpacket.checksum = CNET_crc32((unsigned char *)&rpacket, sizeof(rpacket));
         	dll_wifi_write(dll_states[link], wifi_dest, (char *)&rpacket, packet_length);
         	printf("DATA re-transmitted, seq=%d\n",rpacket.seqNum);
         }
@@ -199,7 +195,7 @@ static void up_from_dll(int link, const char *data, size_t length) {
       }
       case DATA: {
         printf("\t\t\t\tDATA received, seq=%d, ", packet.seqNum);
-        if(packet.seqNum == seqNumExpected) {
+        if(packet.seqNum == seqNums[packet.src]) {
           printf("up to application\n");
           //len = f.len;
           //CHECK(CNET_write_application(&f.msg, &len));
@@ -207,7 +203,7 @@ static void up_from_dll(int link, const char *data, size_t length) {
         }
         else printf("ignored\n");
               
-        struct nl_packet packet = (struct nl_packet){
+        struct nl_packet apacket = (struct nl_packet){
           .src = nodeinfo.address,
           .dest = packet.src,
           .length = 0,
@@ -215,10 +211,10 @@ static void up_from_dll(int link, const char *data, size_t length) {
           .seqNum = packet.seqNum /// global next seqNum
         };
          
-        uint16_t packet_length = NL_PACKET_LENGTH(packet);
-	packet.checksum = CNET_crc32((unsigned char *)&packet, sizeof(packet));
-        dll_wifi_write(dll_states[link], wifi_dest, (char *)&packet, packet_length);
-        printf("ACK transmitted, seq=%d\n",packet.seqNum);
+        uint16_t packet_length = NL_PACKET_LENGTH(apacket);
+	packet.checksum = CNET_crc32((unsigned char *)&apacket, sizeof(apacket));
+        dll_wifi_write(dll_states[link], wifi_dest, (char *)&apacket, packet_length);
+        printf("ACK transmitted, seq=%d\n",apacket.seqNum);
         break;
       }
     }
@@ -284,7 +280,7 @@ static EVENT_HANDLER(application_ready) {
     .src = nodeinfo.address,
     .length = NL_MAXDATA,
     .type = DATA,
-    .seqNum = 1-nextSeqNum /// global next seqNum
+    //.seqNum = 1-nextSeqNum /// global next seqNum
   };
 
   // Create a RTS packet.
@@ -297,7 +293,7 @@ static EVENT_HANDLER(application_ready) {
  
   strcpy(rts.data, "RTS");
   //fprintf(stdout, "node %d %s:\n", nodeinfo. address, rts.data);
- 
+ packet.seqNum = 1 - seqNums[packet.dest];
   // Create checksum for RTS
   rts.checksum = CNET_crc32((unsigned char*)&rts, sizeof(rts));
   packet.checksum = CNET_crc32((unsigned char *)&packet, sizeof(packet));
@@ -305,7 +301,8 @@ static EVENT_HANDLER(application_ready) {
   fprintf(stdout, "Mobile: Generated message for % " PRId32
          ", broadcasting on all data link layers\n",
          packet.dest);
-   
+  
+  packetSent[packet.dest] = packet;
   lastpacket = packet;
     
   // Create a broadcast address.
@@ -325,7 +322,7 @@ static EVENT_HANDLER(application_ready) {
   CnetTime timeout;
   timeout = (packet_length*8000000 / linkinfo[1].bandwidth) + /// fix this to expected average
   	linkinfo[1].propagationdelay;
-  lasttimer3 = CNET_start_timer(EV_TIMER3, timeout, 0);
+  timers[packet.dest]= CNET_start_timer(EV_TIMER3, timeout, 0);
   
   for (int i = 1; i <= nodeinfo.nlinks; ++i) {
     if (dll_states[i] != NULL) {
