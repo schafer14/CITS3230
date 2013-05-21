@@ -81,11 +81,12 @@ static void up_from_dll(int link, const char *data, size_t length) {
   
   printf("AP: Received frame on link %d from node %" PRId32
          " for node %" PRId32 ".\n", link, packet->src, packet->dest);
- 
+
+
   // If the packet is a RTS packet.
   // The strcmp function does not work correctly you can put any word to cmp and it will come up as true!!, check fprintf below to see!. 
   // fprintf(stdout, "STR COMPARE: node %d: data is %s\n", nodeinfo.address, packet->data);
-  if(! strcmp("RTS", packet->data) && AVAILABLE_FOR == packet->src) {
+  if(! strcmp("RTS", packet->data) && AVAILABLE_FOR == 0) {
     
     // Create a CTS packet.
     struct nl_packet cts = (struct nl_packet) {
@@ -107,7 +108,6 @@ static void up_from_dll(int link, const char *data, size_t length) {
     CnetNICaddr broadcast;
     CHECK(CNET_parse_nicaddr(broadcast, "ff:ff:ff:ff:ff:ff"));
 
-<<<<<<< HEAD
     dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);
     AVAILABLE_FOR = 0;
     fprintf(stdout, "Node %d is CTS. AP %d is not Available.\n", packet->src, nodeinfo.address); 
@@ -116,16 +116,13 @@ static void up_from_dll(int link, const char *data, size_t length) {
   else if (AVAILABLE_FOR != packet->src)
   {
      fprintf(stdout, "Node %d is NOT CTS b/c AP %d is unavailable\n", packet->src, nodeinfo.address);
+     return;
   } 
   
 
+ // I think we need to wrap this next bit in an else if (AVAILABLE_FOR == packet->src) 
+ // Just fixed logic above.
 
-
-=======
-    dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);	// Write to wifi data link layer.
-    return;   
-  }
->>>>>>> 4c54b38f16169fe07f5d721000f08e2d7f95d719
 
   // We rebroadcast the packet on all of our links. If the packet came in on an
   // Ethernet link, then don't rebroadcast on that because all other nodes have
