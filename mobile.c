@@ -14,20 +14,22 @@
 // layer.
 static struct dll_wifi_state **dll_states;
 
+#define MAX_BUFFER 100;
+
 #define PACKET_MEMORY_LENGTH 1024
 
 // Keep a list of checksums that we have seen recently.
 static uint32_t seen_checksums[PACKET_MEMORY_LENGTH];
 
-//typedef struct
-//{
-//	int dest;
-//	char * data;
-//}, message;
+typedef struct MESSAGE
+{
+	int dest;
+	char * data;
+} MESSAGE;
 
-//static int first = 0;
-//static int last = 0;
-//static struct message buffer[100];
+static int first = 0;
+static int last = 0;
+static struct MESSAGE buffer[100];
 
 static int CAN_SEND = 0;
 
@@ -36,7 +38,29 @@ static size_t next_seen_checksum = 0;
 
 /// Will print out a message, couldnt this be done during the up_from_dll instead of creating a whole new function??.
 void sendNext() {
-        printf("ENTERING SEND NEXT MODE");
+  // Create a packet.
+  struct nl_packet packet = (struct nl_packet){
+    .src = nodeinfo.address,
+    .length = NL_MAXDATA
+  };
+
+  strcpy(packet.data, buffer[first].data);
+  first ++;
+  packet.checksum = CNET_crc32((unsigned char *)&packet, sizeof(packet));
+
+  CnetNICaddr wifi_dest;
+  CHECK(CNET_parse_nicaddr(wifi_dest, "ff:ff:ff:ff:ff:ff"));
+
+  uint16_t packet_length = NL_PACKET_LENGTH(packet);
+
+  for (int i = 1; i <= nodeinfo.nlinks; ++i) {
+    if (dll_states[i] != NULL) {
+	fprintf(stdout, "Node %d has sent a package. \n", nodeinfo.address);                                                        
+	dll_wifi_write(dll_states[i], wifi_dest, (char *)&packet, packet_length);
+    }
+  }
+
+  fprintf(stdout, "Buffer[first].data: %s\n", buffer[first].data);
 }
 
 /// Called when this mobile node receives a frame on any of its physical links.
@@ -176,12 +200,17 @@ static EVENT_HANDLER(application_ready) {
 
   for (int i = 1; i <= nodeinfo.nlinks; ++i) {
     if (dll_states[i] != NULL) {
-       dll_wifi_write(dll_states[i], wifi_dest, (char *)&packet, packet_length); 
+	fprintf(stdout, "Node %d has RTS\n", nodeinfo.address);                                                        
+        dll_wifi_write(dll_states[i], wifi_dest, (char *)&rts, packet_length); 
 
-	//message{
-	//	.dest = packet.dest;
-	//	.data = packet.data;
-	//};
+	MESSAGE m = {
+		.dest = packet.dest,
+		.data = packet.data
+	};
+	
+	buffer[last] = m;
+	last ++;
+	
 	//dll_wifi_write(dll_states[i], wifi_dest, (char *)&packet, packet_length);
     }
   }

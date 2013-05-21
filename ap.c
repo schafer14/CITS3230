@@ -21,6 +21,8 @@ enum dll_type {
   DLL_WIFI
 };
 
+static int AVAILABLE_FOR = 0;
+
 /// This holds the data link layer type and state for a single link on an AP.
 ///
 struct dll_state {
@@ -82,8 +84,8 @@ static void up_from_dll(int link, const char *data, size_t length) {
  
   // If the packet is a RTS packet.
   // The strcmp function does not work correctly you can put any word to cmp and it will come up as true!!, check fprintf below to see!. 
-  // fprintf(stdout, "node %d: data is %s\n", nodeinfo.address, packet->data);
-  /*if(strcmp("RTS", packet->data)) {
+  // fprintf(stdout, "STR COMPARE: node %d: data is %s\n", nodeinfo.address, packet->data);
+  if(! strcmp("RTS", packet->data) && AVAILABLE_FOR == packet->src) {
     
     struct nl_packet cts = (struct nl_packet) {
       .src = nodeinfo.address,
@@ -102,8 +104,18 @@ static void up_from_dll(int link, const char *data, size_t length) {
     CHECK(CNET_parse_nicaddr(broadcast, "ff:ff:ff:ff:ff:ff"));
 
     dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);
+    AVAILABLE_FOR = 0;
+    fprintf(stdout, "Node %d is CTS. AP %d is not Available.\n", packet->src, nodeinfo.address); 
     return;   
-  }*/
+  }
+  else if (AVAILABLE_FOR != packet->src)
+  {
+     fprintf(stdout, "Node %d is NOT CTS b/c AP %d is unavailable\n", packet->src, nodeinfo.address);
+  } 
+  
+
+
+
 
   // We rebroadcast the packet on all of our links. If the packet came in on an
   // Ethernet link, then don't rebroadcast on that because all other nodes have
