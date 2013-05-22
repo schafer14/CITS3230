@@ -27,6 +27,8 @@ static int nextSeqNum = 0;	// Will store our next sequence number.
 
 #define PACKET_MEMORY_LENGTH 1024
 
+void sendPri(int);
+
 // Keep a list of checksums that we have seen recently.
 static uint32_t seen_checksums[PACKET_MEMORY_LENGTH];
 
@@ -70,6 +72,32 @@ void sendNext() {
   }
 
 }
+
+
+/*
+/// Sends the packet indexed num in the priority array. 
+void sendNextPri(int num) {
+//  // Create a packet.
+  struct nl_packet packet = toSendPackets[num];
+   
+  packet.checksum = CNET_crc32((unsigned char *)&packet, sizeof(packet));
+
+  CnetNICaddr wifi_dest;
+  CHECK(CNET_parse_nicaddr(wifi_dest, "ff:ff:ff:ff:ff:ff"));
+
+  uint16_t packet_length = NL_PACKET_LENGTH(packet);
+
+  for (int i = 1; i <= nodeinfo.nlinks; ++i) {
+    if (dll_states[i] != NULL) {
+	fprintf(stdout, "Node %d has sent a package. \n", nodeinfo.address);                                                        
+	dll_wifi_write(dll_states[i], wifi_dest, (char *)&packet, packet_length);
+    }
+  }
+
+}
+
+*/
+
 
 
 /// This function will handle our frame timeouts.
@@ -118,11 +146,50 @@ static void up_from_dll(int link, const char *data, size_t length) {
   memset(&packet, 0, sizeof(packet));
   memcpy(&packet, data, length);
 
+  if (packet.dest != nodeinfo.address) {
+    printf("\tThat's not for me.\n");
+    
+    //check the first three letters to see if it's "CTS" 
+    char a[4];
+    strncpy(a, packet.data, 3);
+
+    //If it's a CTS get who has the CTS
+    if(0 == strcmp(a, "CTS")) {
+      char access [5];
+      strncpy(access, packet.data+3, 1);
+	
+      if(nodeinfo.address == atoi(access)) {
+         char c[4];
+	 strncpy(c, packet.data+4, 3);
+         if (strcmp(c, "PRI") == 0)
+	 { 
+            char seq [3];
+            strncpy(seq, packet.data+7, 2);
+	    //sendNextPri(atoi(seq)); 
+	    return;	  
+	 } 
+         else
+         {
+	    sendNext();
+         } 
+        CAN_SEND = 1; 
+        printf("I am cleared to send\n");
+      }  	
+      else {
+        CAN_SEND = -1;
+        printf("I better not be sending\n");
+      }
+    }
+    return;
+  }  
+
+
   if (packet.dest == nodeinfo.address) 
   {
 	fprintf(stdout, "I GOT A MESSAGE");
 	fprintf(stdout, "from %d\n", packet.src);//I had packet.dest here. I was so confused :(
 	fprintf(stdout, "\t I am %d btws\n", nodeinfo.address);
+        //it will go up later.
   }
 
 
@@ -247,8 +314,9 @@ static void up_from_dll(int link, const char *data, size_t length) {
   // Send this packet to the application layer.
   fprintf(stdout, "\tUp to the application layer!\n");
   
-  size_t payload_length = packet.length;
-  CHECK(CNET_write_application(packet.data, &payload_length));
+  //COMMENT THESE BACK IN LATER
+  //size_t payload_length = packet.length;
+  //CHECK(CNET_write_application(packet.data, &payload_length));
 }
 
 /// Called when this mobile node's application layer has generated a new
@@ -321,6 +389,38 @@ static EVENT_HANDLER(application_ready) {
   }
     printf("DATA transmitted, seq=%d\n",packet.seqNum);
     nextSeqNum = 1 - nextSeqNum;
+}
+
+void sendPri(int num)
+{
+  // Create a RTS packet.
+  struct nl_packet rts = (struct nl_packet) {
+    .src = nodeinfo.address,
+    .length = NL_MAXDATA
+  }; 
+
+  //CHECK(CNET_read_application(&packet.dest, packet.data, &packet.length));
+  char ch [10]; 
+  strcpy(rts.data, "RTS_PRI");
+  sprintf(ch, "%d", num);
+  strcat(rts.data, ch);
+  //fprintf(stdout, "WRONG: %s\n", rts.data);
+  // Create checksum for RTS
+  rts.checksum = CNET_crc32((unsigned char*)&rts, sizeof(rts));
+    
+  // Create a broadcast address.
+  CnetNICaddr wifi_dest;
+  CHECK(CNET_parse_nicaddr(wifi_dest, "ff:ff:ff:ff:ff:ff"));
+  //CnetNICaddr rts_dest; 
+  //CHECK(CNET_parse_nicaddr(rts_dest, "ff:ff:ff:ff:ff:ff"));
+ 
+  uint16_t packet_length = NL_PACKET_LENGTH(rts);
+  
+  for (int i = 1; i <= nodeinfo.nlinks; ++i) {
+    if (dll_states[i] != NULL) {
+        dll_wifi_write(dll_states[i], wifi_dest, (char *)&rts, packet_length);
+    }
+  }
 }
 
 /// Called when this mobile node is booted up.

@@ -81,6 +81,58 @@ static void up_from_dll(int link, const char *data, size_t length) {
   
   printf("AP: Received frame on link %d from node %" PRId32
          " for node %" PRId32 ".\n", link, packet->src, packet->dest);
+  
+  char b [10];
+  char all [12];
+  strncpy(b, packet->data, 7);
+  strcpy(all, packet->data);
+  int pri = strcmp(b, "RTS_PRI");
+
+  if(pri == 0  && AVAILABLE_FOR == 0) {
+
+     char ch [2];
+     memcpy(ch, &all[7], 2);
+     //we should have abstracted this all, but we kept adding to it.
+     //It's hard to make beautiful code under time constraints. 
+    
+    // Create a CTS packet.
+    struct nl_packet cts_pri = (struct nl_packet) {
+      .src = nodeinfo.address,
+      .length = 10
+    };
+
+    // Copy our CTS data into our packet.
+    strcpy(cts_pri.data, "CTS");
+    char src [2];
+    sprintf(src, "%d", packet->src);
+    strcat(cts_pri.data, src);
+    strcat(cts_pri.data, "PRI");
+    strcat(cts_pri.data, ch);
+
+    // Create a checksum.
+    cts_pri.checksum = CNET_crc32((unsigned char *)&cts_pri, sizeof(cts_pri));
+    uint16_t cts_length = NL_PACKET_LENGTH(cts_pri);
+
+    // Broadcast on all wifi links
+    CnetNICaddr broadcast;
+    CHECK(CNET_parse_nicaddr(broadcast, "ff:ff:ff:ff:ff:ff"));
+
+    dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts_pri, cts_length);
+    AVAILABLE_FOR = packet->src;
+    fprintf(stdout, "Node %d is CTS_PRI. AP %d is not Available.\n", packet->src, nodeinfo.address); 
+    return;   
+  }
+  else if (AVAILABLE_FOR != packet->src && pri == 0)
+  {
+     
+    fprintf(stdout, "Ap %d is not available \n", nodeinfo.address); 
+     return;
+  }
+
+
+
+
+
 
   int RTS = strcmp("RTS", packet->data);
   // If the packet is a RTS packet.
@@ -109,12 +161,14 @@ static void up_from_dll(int link, const char *data, size_t length) {
     CHECK(CNET_parse_nicaddr(broadcast, "ff:ff:ff:ff:ff:ff"));
 
     dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);
-    AVAILABLE_FOR = 0;
-    fprintf(stdout, "Node %d is CTS. AP %d is not Available.\n", packet->src, nodeinfo.address); 
-    return;   
+    AVAILABLE_FOR = packet->src;
+      
+    fprintf(stdout, "Ap %d is now available for node %d\n", nodeinfo.address,packet->src); 
+     return;   
   }
   else if (AVAILABLE_FOR != packet->src && RTS != 1)
   {
+     
      fprintf(stdout, "Node %d is NOT CTS b/c AP %d is unavailable\n", packet->src, nodeinfo.address);
      return;
   }
