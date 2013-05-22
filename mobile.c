@@ -20,8 +20,8 @@ static size_t lastlength = 0;	// Define a variabe to hold our length.
 static CnetTimerID lasttimer3 = NULLTIMER;	// Will store our timer data.
 
 static int nextSeqNum = 0;	// Will store our next sequence number.
-static int seqNumExpected =0;	// Will store the expected sequence number.
-static int ackexpected = 0;	// Will store the ACK expected.
+//static int seqNumExpected =0;	// Will store the expected sequence number.
+//static int ackexpected = 0;	// Will store the ACK expected.
 //static  int             nextframetosend         = 0;
 //static  int             frameexpected           = 0;
 
@@ -70,6 +70,7 @@ void sendNext() {
   }
 
 }
+
 
 /// This function will handle our frame timeouts.
 ///
@@ -140,7 +141,7 @@ static void up_from_dll(int link, const char *data, size_t length) {
   CHECK(CNET_parse_nicaddr(wifi_dest, "ff:ff:ff:ff:ff:ff"));
    
   // Ensure checksum is valid.
-  if((CNET_crc32((unsigned char *)&packet, sizeof(packet)) != checksum) || (packet.seqNum != seqNumExpected)) {
+  /*if((CNET_crc32((unsigned char *)&packet, sizeof(packet)) != checksum) || (packet.seqNum != seqNumExpected)) {
     printf("\tChecksum failed or wrong seqNum received:%d expected: %d \n", packet.seqNum, seqNumExpected);
     // Put something to send NACK here.
     struct nl_packet packet = (struct nl_packet) {
@@ -200,7 +201,7 @@ static void up_from_dll(int link, const char *data, size_t length) {
         break;
       }
     }
-  }
+  }*/
   
   // If packet destination does not match our address then discard.
   if (packet.dest != nodeinfo.address) {
@@ -244,7 +245,7 @@ static void up_from_dll(int link, const char *data, size_t length) {
   next_seen_checksum %= PACKET_MEMORY_LENGTH;
   
   // Send this packet to the application layer.
-  printf("\tUp to the application layer!\n");
+  fprintf(stdout, "\tUp to the application layer!\n");
   
   size_t payload_length = packet.length;
   CHECK(CNET_write_application(packet.data, &payload_length));
