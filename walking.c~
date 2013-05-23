@@ -31,9 +31,9 @@ static EVENT_HANDLER(walkingstyle)
 
     for (size_t i = 0; i < 1000; ++i) {
       if (FENCE_A[i])
-        fprintf(stdout, "FENCE_A damaged %d: %c.\n", (int)i, FENCE_A[i]);
+        fprintf(stdout, "FENCE_A damaged %d.\n", (int)i);
       if (FENCE_B[i])
-        fprintf(stdout, "FENCE_B damaged %d: %c.\n", (int)i, FENCE_B[i]);
+        fprintf(stdout, "FENCE_B damaged %d.\n", (int)i);
     }
 
     CnetPosition	now;
