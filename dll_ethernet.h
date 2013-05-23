@@ -13,6 +13,10 @@
 ///
 struct dll_eth_state;
 
+/// This will store the ethernet exponential backoff function for when we encounter a collision.
+///
+void eth_coll_exp_backoff(struct dll_eth_state *state);
+
 /// Create a new state for an instance of the Ethernet data link layer.
 ///
 struct dll_eth_state *dll_eth_new_state(int link, up_from_dll_fn_ty callback);

@@ -13,13 +13,6 @@
 //
 #define NL_MAXDATA 1024
 
-// Define an enum to represent our frame.
-enum networkAck {
-    ACK,
-    NACK,
-    DATA 
-};
-
 /// This struct defines the format for a network layer packet.
 ///
 struct nl_packet {
@@ -28,10 +21,6 @@ struct nl_packet {
   
   /// The node that this packet was created by.
   CnetAddr src;
-    
-    enum networkAck type;
-    
-    int seqNum;
   
   /// Checksum for this packet.
   uint32_t checksum;

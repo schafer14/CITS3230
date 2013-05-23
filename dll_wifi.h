@@ -13,6 +13,15 @@
 ///
 struct dll_wifi_state;
 
+/// This declares our wifi exponential backoff function in the event of
+//  a collision.
+///  
+void wifi_coll_exp_backoff(struct dll_wifi_state *state);
+
+/// This declares our wifi exponential backoff function.
+///
+void wifi_exp_backoff(struct dll_wifi_state *state);
+
 /// Create a new state for an instance of the WiFi data link layer.
 ///
 struct dll_wifi_state *dll_wifi_new_state(int link,

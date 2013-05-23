@@ -1,3 +1,5 @@
+/// This is our standard TOPOLOGY file.
+///
 
 compile		= "project.c ap.c dll_ethernet.c dll_wifi.c mapping.c mobile.c walking.c -lm"
 
