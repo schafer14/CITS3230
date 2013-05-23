@@ -4,7 +4,6 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #include "ap.h"
 #include "dll_ethernet.h"
@@ -39,12 +38,12 @@ static struct dll_state *dll_states = NULL;
 ///
 static EVENT_HANDLER(physical_ready)
 {
-  // This is used to store the physical layer data in a frame.
+  // First we read the frame from the physical layer.
   char frame[DLL_MTU];
-  size_t length = sizeof(frame);
+  size_t length	= sizeof(frame);
   int link;
-  
-  CHECK(CNET_read_physical(&link, frame, &length));	// Copy the physical layer data into our frame.
+
+  CHECK(CNET_read_physical(&link, frame, &length));
   
   // Now we forward this information to the correct data link layer.
   if (link > nodeinfo.nlinks) {
@@ -67,13 +66,6 @@ static EVENT_HANDLER(physical_ready)
       dll_wifi_read(dll_states[link].data.wifi, frame, length);
       break;
   }
-}
-
-/// Called when we encounter a collision.
-///
-static EVENT_HANDLER(collision) {
-  if(((int)data == 1)) wifi_coll_exp_backoff(dll_states[(int)data].data.wifi); // Call our wifi backoff
-  else eth_coll_exp_backoff(dll_states[(int)data].data.ethernet);	// Call our ethernet backoff
 }
 
 /// Called when we receive data from one of our data link layers.
@@ -132,8 +124,7 @@ void reboot_accesspoint()
   
   // Provide the required event handlers.
   CHECK(CNET_set_handler(EV_PHYSICALREADY, physical_ready, 0));
-  CHECK(CNET_set_handler(EV_FRAMECOLLISION, collision, 0));
- 
+  
   // Prepare to talk via our wireless connection.
   CHECK(CNET_set_wlan_model(my_WLAN_model));
   

@@ -21,20 +21,11 @@ static	bool		paused		= true;
 
 static EVENT_HANDLER(walkingstyle)
 {
-    static	char		FENCE_A[1000];
     static	double		dx	= 0.0;
     static	double		dy	= 0.0;
     static	double		newx	= 0.0;
     static	double		newy	= 0.0;
     static	int		nsteps	= 0;
-    static	char		FENCE_B[1000];
-
-    for (size_t i = 0; i < 1000; ++i) {
-      if (FENCE_A[i])
-        fprintf(stdout, "FENCE_A damaged %d: %c.\n", (int)i, FENCE_A[i]);
-      if (FENCE_B[i])
-        fprintf(stdout, "FENCE_B damaged %d: %c.\n", (int)i, FENCE_B[i]);
-    }
 
     CnetPosition	now;
     CnetTime		movenext;
