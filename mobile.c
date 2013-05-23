@@ -117,9 +117,23 @@ EVENT_HANDLER(timeouts) {
   printf("DATA re-transmitted, seq=%d\n",packet.seqNum);
 }
 
+void checkBuffer()
+{
+
+     fprintf(stdout, "LAST %d\n", last);
+
+     if(first > 90 || last > 90)
+     {
+	first = 0;
+  	last = 0;
+     } 
+}
+
 /// Called when this mobile node receives a frame on any of its physical links.
 ///
 static EVENT_HANDLER(physical_ready) {
+
+
   // First we read the frame from the physical layer.
   char frame[DLL_MTU];
   size_t length	= sizeof(frame);
@@ -136,6 +150,7 @@ static EVENT_HANDLER(physical_ready) {
 /// Called when we receive data from one of our data link layers.
 ///
 static void up_from_dll(int link, const char *data, size_t length) {  
+   checkBuffer();
   // If length of data is greater than packet length then discard.
   if (length > sizeof(struct nl_packet)) {
     printf("Mobile: %zu is larger than a nl_packet! ignoring.\n", length);
@@ -317,6 +332,9 @@ static void up_from_dll(int link, const char *data, size_t length) {
   //COMMENT THESE BACK IN LATER
   //size_t payload_length = packet.length;
   //CHECK(CNET_write_application(packet.data, &payload_length));
+
+
+
 }
 
 /// Called when this mobile node's application layer has generated a new
