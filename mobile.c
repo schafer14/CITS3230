@@ -99,6 +99,12 @@ EVENT_HANDLER(timeouts) {
   printf("\t\t\t\t\t\tTime out DATA re-transmitted, seq=%d\n",packet.seqNum);
 }
 
+/// Called when we encounter a collision.
+///
+static EVENT_HANDLER(collision) {
+  wifi_coll_exp_backoff(dll_states[1]); // Call our wifi backoff because mobiles only use the wifi layer.
+}
+
 /// Called when this mobile node receives a frame on any of its physical links.
 ///
 static EVENT_HANDLER(physical_ready) {
@@ -113,12 +119,6 @@ static EVENT_HANDLER(physical_ready) {
   if (link > nodeinfo.nlinks || dll_states[link] == NULL) return;
   
   dll_wifi_read(dll_states[link], frame, length);
-}
-
-/// Called when we encounter a collision.
-///
-static EVENT_HANDLER(collision) {
-  wifi_coll_exp_backoff(dll_states[1].data.wifi); // Call our wifi backoff because mobiles only use the wifi layer.
 }
 
 /// Called when we receive data from one of our data link layers.
@@ -155,7 +155,10 @@ static void up_from_dll(int link, const char *data, size_t length) {
   // Set our broadcast.
   CnetNICaddr wifi_dest;
   CHECK(CNET_parse_nicaddr(wifi_dest, "ff:ff:ff:ff:ff:ff"));
-     
+   
+
+ 
+  
   // If packet destination does not match our address then discard.
   if (packet.dest != nodeinfo.address) {
     printf("\tThat's not for me.\n");
@@ -170,7 +173,7 @@ static void up_from_dll(int link, const char *data, size_t length) {
       char access [5];
       memcpy(access, &packet.data[3], 2);
       //fprintf(stdout, "node %d: %s:\n", nodeinfo.address, a);
-
+	
       printf("CTS to: %s\n", access);
       if(nodeinfo.address == atoi(access)) {
         CAN_SEND = 1; 
@@ -196,8 +199,10 @@ static void up_from_dll(int link, const char *data, size_t length) {
   // Remember the checksum of this packet.
   seen_checksums[next_seen_checksum++] = checksum;
   next_seen_checksum %= PACKET_MEMORY_LENGTH;
-   
-  // Ensure checksum is valid.
+  
+
+  
+ // Ensure checksum is valid.
   if(CNET_crc32((unsigned char *)&packet, sizeof(packet)) != checksum ) {
 	printf("\tChecksum failed  for packet type %d \n", packet.type);
     // Put something to send NACK here.
@@ -221,6 +226,8 @@ static void up_from_dll(int link, const char *data, size_t length) {
     return;
   } 
   
+ 
+
     printf("ELSE");
     switch(packet.type) {
       case ACK: {
@@ -255,7 +262,7 @@ static void up_from_dll(int link, const char *data, size_t length) {
           printf("up to application\n");
           //CHECK(CNET_write_application(packet.data, &payload_length));
           expectedSeqNums[packet.src]= 1-expectedSeqNums[packet.src];
-
+	
 		 struct nl_packet apacket = (struct nl_packet){
          		 .src = nodeinfo.address,
           		.dest = packet.src,
@@ -285,6 +292,11 @@ static void up_from_dll(int link, const char *data, size_t length) {
 	}
         break;
       }
+    
+  
+
+
+	
 }
 
 /// Called when this mobile node's application layer has generated a new
@@ -349,10 +361,10 @@ static EVENT_HANDLER(application_ready) {
 		.dest = packet.dest,
 		.data = packet.data
 	};
-
+	
 	buffer[last] = m;
 	last ++;
-
+	
 	dll_wifi_write(dll_states[i], wifi_dest, (char *)&packet, packet_length);
     }
   }

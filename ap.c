@@ -4,6 +4,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <time.h>
 
 #include "ap.h"
@@ -20,6 +21,8 @@ enum dll_type {
   DLL_WIFI
 };
 
+static int AVAILABLE_FOR = 0;
+
 /// This holds the data link layer type and state for a single link on an AP.
 ///
 struct dll_state {
@@ -35,40 +38,6 @@ struct dll_state {
 ///
 static struct dll_state *dll_states = NULL;
 
-/// Raised when one of our physical links has received a frame.
-///
-static EVENT_HANDLER(physical_ready)
-{
-  // This is used to store the physical layer data in a frame.
-  char frame[DLL_MTU];
-  size_t length = sizeof(frame);
-  int link;
-  
-  CHECK(CNET_read_physical(&link, frame, &length));	// Copy the physical layer data into our frame.
-  
-  // Now we forward this information to the correct data link layer.
-  if (link > nodeinfo.nlinks) {
-    // printf("AP: Received frame on unknown link %d.\n", link);
-    return;
-  }
-  
-  switch (dll_states[link].type) {
-    case DLL_UNSUPPORTED:
-      // printf("AP: Received frame on unsupported link.\n");
-      break;
-    
-    case DLL_ETHERNET:
-      // printf("AP: Received frame on Ethernet link %d.\n", link);
-      dll_eth_read(dll_states[link].data.ethernet, frame, length);
-      break;
-    
-    case DLL_WIFI:
-      // printf("AP: Received frame on WiFi link %d.\n", link);
-      dll_wifi_read(dll_states[link].data.wifi, frame, length);
-      break;
-  }
-}
-
 /// Called when we encounter a collision.
 ///
 static EVENT_HANDLER(collision) {
@@ -76,11 +45,40 @@ static EVENT_HANDLER(collision) {
   else eth_coll_exp_backoff(dll_states[(int)data].data.ethernet);	// Call our ethernet backoff
 }
 
+/// Raised when one of our physical links has received a frame.
+///
+static EVENT_HANDLER(physical_ready) {
+  // First we read the frame from the physical layer.
+  char frame[DLL_MTU];
+  size_t length	= sizeof(frame);
+  int link;
+
+  CHECK(CNET_read_physical(&link, frame, &length));
+  
+  // Now we forward this information to the correct data link layer.
+  if (link > nodeinfo.nlinks) {
+    return;	// If link is unknown discard frame.
+  }
+  
+  switch (dll_states[link].type) {
+    case DLL_UNSUPPORTED:
+      break;	// If the type of link is unsupported discard frame.
+    
+    case DLL_ETHERNET:
+      dll_eth_read(dll_states[link].data.ethernet, frame, length);	// If frame has arrived on the ethernet link then pass to the ethernet read.
+      break;
+    
+    case DLL_WIFI:
+      dll_wifi_read(dll_states[link].data.wifi, frame, length);		// If frame has arrived on the wifi link then pass to the wifi read.
+      break;
+  }
+}
+
 /// Called when we receive data from one of our data link layers.
 ///
-static void up_from_dll(int link, const char *data, size_t length)
-{
-  if (length >= sizeof(struct nl_packet)) {
+static void up_from_dll(int link, const char *data, size_t length) {
+  // If frame is larger than a network packet discard.
+  if (length > sizeof(struct nl_packet)) {
     printf("AP: %zu is larger than a nl_packet! ignoring.\n", length);
     return;
   }
@@ -90,7 +88,48 @@ static void up_from_dll(int link, const char *data, size_t length)
   
   printf("AP: Received frame on link %d from node %" PRId32
          " for node %" PRId32 ".\n", link, packet->src, packet->dest);
+
+  int RTS = strcmp("RTS", packet->data);
+  // If the packet is a RTS packet.
+  // The strcmp function does not work correctly you can put any word to cmp and it will come up as true!!, check fprintf below to see!. 
+  // fprintf(stdout, "STR COMPARE: node %d: data is %s\n", nodeinfo.address, packet->data);
+  if(RTS != 1  && AVAILABLE_FOR == 0) {
+    
+    // Create a CTS packet.
+    struct nl_packet cts = (struct nl_packet) {
+      .src = nodeinfo.address,
+      .length = 10
+    };
+
+    // Copy our CTS data into our packet.
+    char src[10];
+    strcpy(cts.data, "CTS");
+    sprintf(src, "%d", packet->src);
+    strcat(cts.data, src);
   
+    // Create a checksum.
+    cts.checksum = CNET_crc32((unsigned char *)&cts, sizeof(cts));
+    uint16_t cts_length = NL_PACKET_LENGTH(cts);
+
+    // Broadcast on all wifi links
+    CnetNICaddr broadcast;
+    CHECK(CNET_parse_nicaddr(broadcast, "ff:ff:ff:ff:ff:ff"));
+
+    dll_wifi_write(dll_states[link].data.wifi, broadcast, (char *)&cts, cts_length);
+    AVAILABLE_FOR = 0;
+    fprintf(stdout, "Node %d is CTS. AP %d is not Available.\n", packet->src, nodeinfo.address); 
+    return;   
+  }
+  else if (AVAILABLE_FOR != packet->src && RTS != 1)
+  {
+     fprintf(stdout, "Node %d is NOT CTS b/c AP %d is unavailable\n", packet->src, nodeinfo.address);
+     return;
+  }
+
+
+
+  fprintf(stdout, "Packet received from: %d\n", packet->src);
+
   // We rebroadcast the packet on all of our links. If the packet came in on an
   // Ethernet link, then don't rebroadcast on that because all other nodes have
   // already seen it.
@@ -100,16 +139,15 @@ static void up_from_dll(int link, const char *data, size_t length)
   for (int outlink = 1; outlink <= nodeinfo.nlinks; ++outlink) {
     switch (dll_states[outlink].type) {
       case DLL_UNSUPPORTED:
-        break;
+        break;	// If link is unsupported then discard packet.
       
       case DLL_ETHERNET:
-        if (outlink == link)
-          break;
+        if (outlink == link) break; // If data has arrived on the ethernet link then discard the packet.
         printf("\tSending on Ethernet link %d\n", outlink);
         dll_eth_write(dll_states[outlink].data.ethernet,
                       broadcast,
                       data,
-                      length);
+                      length);	// Write the packet to the ethernet data link layer.
         break;
       
       case DLL_WIFI:
@@ -117,7 +155,7 @@ static void up_from_dll(int link, const char *data, size_t length)
         dll_wifi_write(dll_states[outlink].data.wifi,
                        broadcast,
                        data,
-                       length);
+                       length);	// Write the packet to the wifi data link layer.
         break;
     }
   }
@@ -125,15 +163,14 @@ static void up_from_dll(int link, const char *data, size_t length)
 
 /// Called when this access point is booted up.
 ///
-void reboot_accesspoint()
-{
+void reboot_accesspoint() {
   // We require each node to have a different stream of random numbers.
   CNET_srand(nodeinfo.time_of_day.sec + nodeinfo.nodenumber);
   
   // Provide the required event handlers.
   CHECK(CNET_set_handler(EV_PHYSICALREADY, physical_ready, 0));
   CHECK(CNET_set_handler(EV_FRAMECOLLISION, collision, 0));
- 
+
   // Prepare to talk via our wireless connection.
   CHECK(CNET_set_wlan_model(my_WLAN_model));
   
@@ -143,26 +180,24 @@ void reboot_accesspoint()
   for (int link = 0; link <= nodeinfo.nlinks; ++link) {
     switch (linkinfo[link].linktype) {
       case LT_LOOPBACK:
-        dll_states[link].type = DLL_UNSUPPORTED;
+        dll_states[link].type = DLL_UNSUPPORTED;	// This project does not support LOOPBACK.
         break;
       
       case LT_WAN:
-        dll_states[link].type = DLL_UNSUPPORTED;
+        dll_states[link].type = DLL_UNSUPPORTED;	// This project does not support WAN's.
         break;
       
       case LT_LAN:
-        dll_states[link].type = DLL_ETHERNET;
-        dll_states[link].data.ethernet = dll_eth_new_state(link, up_from_dll);
+        dll_states[link].type = DLL_ETHERNET;	// Set the type to ethernet.
+        dll_states[link].data.ethernet = dll_eth_new_state(link, up_from_dll);	// Create a new ethernet state.
         break;
       
       case LT_WLAN:
-        dll_states[link].type = DLL_WIFI;
+        dll_states[link].type = DLL_WIFI;	// Set the type to wifi.
         dll_states[link].data.wifi = dll_wifi_new_state(link,
                                                         up_from_dll,
-                                                        true /* is_ds */);
+                                                        true /* is_ds */);	// Create a new wifi state.
         break;
     }
   }
-  
-  // printf("reboot_accesspoint() complete.\n");
 }

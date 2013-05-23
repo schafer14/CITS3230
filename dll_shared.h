@@ -11,5 +11,5 @@
 /// frame data up to the next layer.
 ///
 typedef void (*up_from_dll_fn_ty)(int link, char const *data, size_t length);
- 
+
 #endif // DLL_SHARED_H
